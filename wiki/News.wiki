@@ -1,0 +1,5 @@
+#summary Latest news about this project.
+#labels Featured
+
+==February 27th, 2007 - Project creation==
+A newsletter Wordpress plugin was created. Soon a public release will be available for download.
