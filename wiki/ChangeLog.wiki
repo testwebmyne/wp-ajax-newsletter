@@ -2,4 +2,4 @@
 #labels Featured
 
 ===February 27, 2007===
- * Project was created.
+ * Project created and added to the repository (v1.0 RC1)
