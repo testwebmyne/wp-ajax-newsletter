@@ -2,9 +2,10 @@
 
 /*
  Plugin Name: Ajax Newsletter
+ Plugin URI: http://code.google.com/p/wp-ajax-newsletter/
  Description: Allows users to subscribe and receive a newsletter containing the blog latest posts.
  Author: Tiago Pocinho, Siemens Networks, S.A.
- Version: 1.0 RC1
+ Version: 1.0 RC2
  */
 
 class ajaxNewsletter {
@@ -67,6 +68,30 @@ class ajaxNewsletter {
 	}
 	
 	/**
+	 * From http://www.phpbuilder.com/board/showthread.php?t=10222903
+	 * 
+	 * Gets a date based on a year and week date
+	 * 
+	 * @param int $wk_num Number of the week
+	 * @param int $yr Year of the date
+	 * @param int first $number of days
+	 * @param string $format Date format
+	 * 
+	 * @return string The generated date
+	 */
+	function getDateByWeek($wk_num, $yr, $first = 1, $format = 'Y-n-d')
+	{
+		$wk_num --;
+		if($wk_num < 0 || !is_numeric($wk_num)){
+			$wk_num = 0;
+		}
+	    $wk_ts  = strtotime('+' . $wk_num . ' weeks', strtotime($yr . '0101'));
+	    $mon_ts = strtotime('-' . date('w', $wk_ts) + $first . ' days', $wk_ts);
+	    return date($format, $mon_ts);
+	}
+
+	
+	/**
 	 * Checks if the Newsletter should be sent.
 	 * If the newsletter can be sent it will send it to all active subscribers.
 	 */
@@ -85,14 +110,35 @@ class ajaxNewsletter {
 
 		$last = get_option("snews_last");
 		$count = get_option("snews_count");
-		$posts = ajaxNewsletter::getPostsSince($last);
-		$postCount = count($posts);
+		$sendFlag = false;
+		
 		switch($period){ 
 			case "month":
 				//see if a month since last submit has elapsed and if posts are available
 				$lastMonth = mysql2date("n",$last) + 0;
 				$thisMonth = date("n",mktime()) + 0;
-				if($lastMonth < $thisMonth && $postCount > 0){
+				
+				$lastYear = mysql2date("Y",$last) + 0;
+				$thisYear = date("Y",mktime()) + 0;
+				
+				if($lastYear < $thisYear && $thisMonth == 1){
+					$since .= $thisYear -1;
+					$since .= "-";
+				}else{
+					$since .= $thisYear ."-";
+				}
+				if($thisMonth == 1){
+					$since .= "12-01";
+				}else {
+					$since .= ($thisMonth - 1)."-1";
+				}
+				
+				$to = $thisYear."-".$thisMonth."-1";
+				
+				$posts = ajaxNewsletter::getPostsSince($to,$since);
+				$postCount = count($posts);
+				
+				if(($lastYear < $thisYear || $lastMonth < $thisMonth) && $postCount > 0){
 					$content = ajaxNewsletter::generateContent($posts);
 					ajaxNewsletter::sendNewsletter($content);
 				}
@@ -100,6 +146,21 @@ class ajaxNewsletter {
 			case "week":
 				$lastWeek = mysql2date("W",$last) + 0;
 				$thisWeek = date("W",mktime()) + 0;
+				
+				$lastYear = mysql2date("Y",$last) + 0;
+				$thisYear = date("Y",mktime()) + 0;
+				
+				if($lastYear < $thisYear && $thisWeek == 1){
+					$since = ajaxNewsletter::getDateByWeek($thisWeek - 1, $thisYear - 1);
+				}else{
+					$since = ajaxNewsletter::getDateByWeek($thisWeek - 1, $thisYear);
+				}
+				
+				$to = ajaxNewsletter::getDateByWeek($thisWeek, $thisYear);
+				
+				$posts = ajaxNewsletter::getPostsSince($to,$since);
+				$postCount = count($posts);
+				
 				if($lastWeek < $thisWeek && $postCount > 0){
 					$content = ajaxNewsletter::generateContent($posts);
 					ajaxNewsletter::sendNewsletter($content);
@@ -126,6 +187,18 @@ class ajaxNewsletter {
 	}
 	
 	/**
+	 * Checks if a table already exists
+	 *
+	 * @param string $table - table name
+	 * @return boolean True if the table already exists
+	 **/
+	function tableExists($table){
+		global $wpdb;
+
+		return strcasecmp($wpdb->get_var("show tables like '$table'"), $table) == 0;
+	}
+	
+	/**
 	 * Installation function, creates tables if needed and sets default values for settings
 	 **/
 	function install(){
@@ -136,7 +209,7 @@ class ajaxNewsletter {
 		
 		require_once(ABSPATH . 'wp-admin/upgrade-functions.php');
 		
-	  	if (!userGroups::tableExists($table)) {
+	  	if (!ajaxNewsletter::tableExists($table)) {
 	  		$sql = "CREATE TABLE $table (
 	        id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
 	        email varchar(100) NOT NULL,
@@ -151,6 +224,7 @@ class ajaxNewsletter {
 	  	}
 	  	
 	  	add_option("snews_count","5");
+	  	add_option("snews_period","manual");
 	  	add_option("snews_template","{TITLE}\n{DATE} - Posted by {AUTHOR}\n\n{EXCERPT}\n{URL}\n\n");
 	  	add_option("snews_last","1970-01-01 00:00:00");
 	  	add_option("snews_header","");
@@ -169,9 +243,9 @@ class ajaxNewsletter {
 	 */
 	function subscribe($email){
 		$returnVal = array();
-		//TODO temporary solution to allow mail@localhost
-		if(!eregi("^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})*$", $email)){
-		/*if(!eregi("^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$", $email)){*/
+		/* switch to this If if you wish to support emails@localhost as a valid email address*/
+		//if(!eregi("^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})*$", $email)){
+		if(!eregi("^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$", $email)){
 			$returnVal['result']=false;
 			$returnVal['message']="Invalid email address.";
 			return $returnVal;
@@ -412,11 +486,11 @@ class ajaxNewsletter {
 		//Get al plugin options to fill the form
 		$count = 	get_option("snews_count");
 		$period = 	get_option("snews_period");
-		$header = 	get_option("snews_header");
-		$template = get_option("snews_template");
-		$footer = 	get_option("snews_footer");
-		$subject = 	get_option("snews_subject");
-		$from = 	get_option("snews_from");
+		$header = 	stripslashes(get_option("snews_header"));
+		$template = stripslashes(get_option("snews_template"));
+		$footer = 	stripslashes(get_option("snews_footer"));
+		$subject = 	stripslashes(get_option("snews_subject"));
+		$from = 	stripslashes(get_option("snews_from"));
 		
 		$path = get_bloginfo("wpurl") . "/wp-content/plugins/wp-ajax-newsletter/"
 		?>
@@ -604,16 +678,20 @@ class ajaxNewsletter {
 	}
 	
 	/**
-	 * Get all posts since a given date
-	 * @param string $datetime The date and time from when we wish to get the posts. (Format: Y-m-d H:i:s)
+	 * Get all posts in a given interval
+	 * @param string $to The date and time to when we wish to get the posts. (Format: Y-m-d H:i:s)
+	 * @param string $since The date and time from when we wish to get the posts. (Format: Y-m-d H:i:s) The default value is an empty string.
 	 * @return array An array of posts
 	 */
-	function getPostsSince($datetime){
+	function getPostsSince($to,$since=""){
 		global $table_prefix, $wpdb;
 		/*plugin tables*/
 		$table = $table_prefix . "snews_members";
 		$results = array();
-		$query = "SELECT * FROM {$wpdb->posts} WHERE post_type='post' AND post_status='publish' AND post_date > '$datetime' ORDER BY post_date;";
+		if($since != "")
+			$sinceString = "AND post_date >= '$since'";
+		$toString = "AND post_date < '$to'";
+		$query = "SELECT * FROM {$wpdb->posts} WHERE post_type='post' AND post_status='publish' $sinceString $toString ORDER BY post_date;";
 		$results = $wpdb->get_results($query);
 		return $results;
 	}
