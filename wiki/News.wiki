@@ -1,5 +1,5 @@
 #summary Latest news about this project.
 #labels Featured
 
-==February 27th, 2007 - Version 1.0 RC1 released==
+==March 20th, 2007 - Version 1.0 RC1 released==
 The first version of the wp-ajax-newsletter pluging for Wordpress was made public. Feel free to download it, test it, and improve it :).
