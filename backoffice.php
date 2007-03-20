@@ -38,10 +38,10 @@ if($_POST["submit"]=="Update"){
 		$settings["count"] = $_POST["count"];
 	}
 	$settings["from"] = $_POST["letterFrom"];
-	$settings["subject"] = htmlentities($_POST["letterSubject"]);
-	$settings["header"] = htmlentities($_POST["letterHeader"]);
-	$settings["template"] = htmlentities($_POST["letterTemplate"]);
-	$settings["footer"] = htmlentities($_POST["letterFooter"]);
+	$settings["subject"] = strip_tags($_POST["letterSubject"]);
+	$settings["header"] = strip_tags($_POST["letterHeader"]);
+	$settings["template"] = strip_tags($_POST["letterTemplate"]);
+	$settings["footer"] = strip_tags($_POST["letterFooter"]);
 
 	ajaxNewsletter::saveSettings($settings);
 	$message = "Settings updated successfully.";

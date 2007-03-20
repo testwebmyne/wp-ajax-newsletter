@@ -7,7 +7,7 @@
 
 ---=[ 1 - General Information ]=------------------------------------------------
 
-Version: 1.0 RC1
+Version: 1.0 RC2
 Date: 20/03/2006
 Author: Tiago Pocinho, Siemens Networks, S.A.
 
