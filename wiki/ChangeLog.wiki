@@ -2,4 +2,12 @@
 #labels Featured
 
 ===March 20, 2007===
+ * Fixed issue #1 - Error creating table.
+ * Added default periodicity for newsletter.
+ * Changed Monthly and Weekly newsletters to send only the previous Week/Month.
+ * Fixed  Monthly and Weekly date verifications on year change.
+ * Fixed bug when ' or " where used in the newsletter configuration fields (removed backslashes). 
+ * Updated to RC2.
+
+===March 20, 2007===
  * Project created and added to the repository (v1.0 RC1)
