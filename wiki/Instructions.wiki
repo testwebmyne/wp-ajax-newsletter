@@ -47,11 +47,12 @@ You can use the following CSS classes to style the form in the front-office:
 To configure this plugin access "Newsletter" under the "Options" tab.
 
 The following tags can be used in the template for the newsletter:
-{TITLE} - The post title
-{URL} - The post URL
-{DATE} - The date when the post was published (uses wordpress defined format)
-{TIME} - The time when the post was published (uses wordpress defined format)
-{AUTHOR} - The post author
-{EXCERPT} - The post excerpt. If none is available, it will be generated based on the content.
-{CONTENT} - The post content.
+|| {TITLE} || The post title ||
+|| {URL} || The post URL ||
+|| {DATE} || The date when the post was published (uses wordpress defined format) ||
+|| {TIME} || The time when the post was published (uses wordpress defined format) ||
+|| {AUTHOR} || The post author ||
+|| {EXCERPT} || The post excerpt. If none is available, it will be generated based on the content. ||
+|| {CONTENT} || The post content. ||
+
 
