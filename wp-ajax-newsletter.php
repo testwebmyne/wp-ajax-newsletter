@@ -47,7 +47,7 @@ class ajaxNewsletter {
 		$last = get_option("snews_last");
 		$count = get_option("snews_count");
 		
-		$posts = ajaxNewsletter::getPostsSince($last);
+		$posts = ajaxNewsletter::getPostsSince("",$last);
 		$postCount = count($posts);
 		
 		//if the number of posts available since last newsletter are equal or greater
@@ -379,7 +379,7 @@ class ajaxNewsletter {
 	}
 	
 	/**
-	 * Gets all member to the newsletter
+	 * Gets all newsletter subscribers
 	 * 
 	 * @param string $status Status of the members (waiting or active). If empty all will be displayed
 	 * 
@@ -397,6 +397,34 @@ class ajaxNewsletter {
 		$query .= ";";
         $results = $wpdb->get_results( $query );
 		return $results;
+	}
+
+	/**
+	 * Checks if a user is already a subscriber
+	 * 
+	 * @param string $email Email to test
+	 * @param int $userID User identifier to test
+	 * 
+	 * @return boolean True the user already subscribed, false otherwise
+	 */
+	function isSubscriber($email="", $userID=null){
+		global $table_prefix, $wpdb;
+		
+		
+		if($email != "" && ajaxNewsletter::getSubscriptionState($email) != ""){
+			return true;
+		}
+	
+		if($userID == null || !is_numeric($userID))
+			return false;
+		
+		/*plugin tables*/
+		$table = $table_prefix . "snews_members";
+		
+		$query = "SELECT COUNT(*) FROM $table ";
+		$query .= "WHERE user = $userID;";
+        $result = $wpdb->get_var( $query );
+		return $result > 0;
 	}
 	
 	/**
@@ -512,7 +540,7 @@ class ajaxNewsletter {
 							<th scope="row" style="width:6em;text-align:left;vertical-align:top;">Periodicity:</th>
 							<td>
 								<input <?php if($period=="manual") echo "CHECKED" ?> type="radio" id="period_0"
-				name="period" value="manual" onclick="toggleState(true, 'count');" /><label for="period_0"> Manually</label><br /> 
+				name="period" value="manual" onclick="toggleState(true, 'count');" /><label for="period_0"> Manual</label><br /> 
 								<input <?php if($period=="week") echo "CHECKED" ?> type="radio" id="period_1"
 				name="period" value="week" onclick="toggleState(true, 'count');" /><label for="period_1"> Weekly</label><br />
 								<input <?php if($period=="month") echo "CHECKED" ?> type="radio"
@@ -596,7 +624,14 @@ class ajaxNewsletter {
 		echo "<div class=\"wrap\">\n<h2>Send Newsletter</h2>";
 		$date = mysql2date(get_option('date_format'), $last);
 		$time = mysql2date(get_option('time_format'), $last);
-		$lastMessage = "<p>The newsletter was last sent on <b>$date</b> at <b>$time</b>.</p>";
+		
+		$year = mysql2date("Y", $last);
+		if($year != "1970"){
+			$lastMessage = "<p>The newsletter was last sent on <b>$date</b> at <b>$time</b>.</p>";
+		}else{
+			$lastMessage = "<p>The newsletter was never sent.</p>";
+		}
+			
 		switch($period){
 			case "every":
 				//It is done automatically on post publish
@@ -604,18 +639,18 @@ class ajaxNewsletter {
 				$count = get_option("snews_count");
 				$postText = "";
 				
-				$posts = ajaxNewsletter::getPostsSince($last); 
+				$posts = ajaxNewsletter::getPostsSince("",$last); 
 				$numPosts = count($posts);
 				
 				$postText = ajaxNewsletter::getNumberText($count,"post");
 				$countText = ajaxNewsletter::getNumberText($numPosts,"post");
 				
-				echo "<p>This is done automatically every time the post counter reaches the value of $postText. There are currently $countText in queue.</p>";
+				echo "<p>This is done automatically every time a new post is published, if there are at least $postText in queue. Currently, there are $countText in queue.</p>";
 				echo $lastMessage;
 				break;
 			case "manual":
 				//manual submition
-				$posts = ajaxNewsletter::getPostsSince($last); 
+				$posts = ajaxNewsletter::getPostsSince("",$last); 
 				$numPosts = count($posts);
 				
 				$members = ajaxNewsletter::getMemberCount("active");
@@ -683,14 +718,15 @@ class ajaxNewsletter {
 	 * @param string $since The date and time from when we wish to get the posts. (Format: Y-m-d H:i:s) The default value is an empty string.
 	 * @return array An array of posts
 	 */
-	function getPostsSince($to,$since=""){
+	function getPostsSince($to="", $since=""){
 		global $table_prefix, $wpdb;
 		/*plugin tables*/
 		$table = $table_prefix . "snews_members";
 		$results = array();
 		if($since != "")
 			$sinceString = "AND post_date >= '$since'";
-		$toString = "AND post_date < '$to'";
+		if($to != "")
+			$toString = "AND post_date < '$to'";
 		$query = "SELECT * FROM {$wpdb->posts} WHERE post_type='post' AND post_status='publish' $sinceString $toString ORDER BY post_date;";
 		$results = $wpdb->get_results($query);
 		return $results;
@@ -904,7 +940,9 @@ function ActivateConfirm(email){
 			}
 		}
 		//we set the new date for the last newsletter
-		update_option("snews_last", date("Y-m-d H:i:s", mktime()));
+		$now = mktime();
+		$now ++;
+		update_option("snews_last", date("Y-m-d H:i:s", $now));
 		
 		return true;
 	}
@@ -1010,6 +1048,11 @@ function ActivateConfirm(email){
 		if(is_numeric($user_ID)){
 			$user = get_userdata($user_ID);
 			$email = $user->user_email;
+			
+			//check if the user already subscribed
+			if(ajaxNewsletter::isSubscriber($email,$user_ID)){
+				$email = "";
+			}
 		}
 		
 		$newsletterURL = get_bloginfo("url") . "/wp-content/plugins/wp-ajax-newsletter/";

@@ -9,7 +9,7 @@ $membersUpdate = false;
 //if we have requested to send the newsletter manually
 if($_POST["submit"]=="Send"){
 	$last = get_option("snews_last");
-	$posts = ajaxNewsletter::getPostsSince($last);
+	$posts = ajaxNewsletter::getPostsSince("" ,$last);
 	if($posts != "" && count($posts) > 0){
 		$content = ajaxNewsletter::generateContent($posts);
 		if(ajaxNewsletter::sendNewsletter($content)){
