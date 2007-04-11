@@ -7,8 +7,8 @@
 
 ---=[ 1 - General Information ]=------------------------------------------------
 
-Version: 1.0 RC2
-Date: 20/03/2006
+Version: 1.0
+Date: 10/04/2006
 Author: Tiago Pocinho, Siemens Networks, S.A.
 
 This plugin allows users to subscribe and receive a newsletter containing the blog latest posts.
