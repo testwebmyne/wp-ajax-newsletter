@@ -84,6 +84,7 @@ function showPreview(){
 	var template = contentTxt;
 	
 	template = template.replace(/{TITLE}/gi, "Post Title");	
+	template = template.replace(/{UPTITLE}/gi, "POST TITLE");	
 	template = template.replace(/{URL}/gi, "http://yourblogurl.com/post1/");
 	template = template.replace(/{DATE}/gi, "March 10, 2007");
 	template = template.replace(/{TIME}/gi, "15:00");
@@ -93,7 +94,8 @@ function showPreview(){
 	var body = template;
 	
 	template = contentTxt;
-	template = template.replace(/{TITLE}/gi, "Another Post");		
+	template = template.replace(/{TITLE}/gi, "Another Post");	
+	template = template.replace(/{UPTITLE}/gi, "ANOTHER POST");	
 	template = template.replace(/{URL}/gi, "http://yourblogurl.com/post2/");
 	template = template.replace(/{DATE}/gi, "March 1, 2007");
 	template = template.replace(/{TIME}/gi, "18:00");

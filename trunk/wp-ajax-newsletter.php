@@ -5,7 +5,7 @@
  Plugin URI: http://code.google.com/p/wp-ajax-newsletter/
  Description: Allows users to subscribe and receive a newsletter containing the blog latest posts.
  Author: Tiago Pocinho, Siemens Networks, S.A.
- Version: 1.0 RC2
+ Version: 1.0
  */
 
 class ajaxNewsletter {
@@ -53,7 +53,7 @@ class ajaxNewsletter {
 		//if the number of posts available since last newsletter are equal or greater
 		//than the specified value in the settings, we send the new newsletter
 		if($postCount >= $count){
-			$content = ajaxNewsletter::generateContent($posts);
+			$content = ajaxNewsletter::generateContent($posts,$count);
 			ajaxNewsletter::sendNewsletter($content);
 		}
 	}
@@ -64,7 +64,7 @@ class ajaxNewsletter {
 	function admin_css(){
 		$path = get_bloginfo("wpurl") . "/wp-content/plugins/wp-ajax-newsletter/";
 		echo "<link rel=\"stylesheet\" href=\"{$path}style.css\" type=\"text/css\" />\n";
-		echo "<script type=\"text/javascript\" src=\"{$path}overlay.js\"></script>\n";
+		echo "<script type=\"text/javascript\" src=\"{$path}preview.js\"></script>\n";
 	}
 	
 	/**
@@ -89,6 +89,22 @@ class ajaxNewsletter {
 	    $mon_ts = strtotime('-' . date('w', $wk_ts) + $first . ' days', $wk_ts);
 	    return date($format, $mon_ts);
 	}
+	
+	/**Adds the needed leading zeros to create strings with a fixed size
+	 *
+	 * @param int $number Number to be converted
+	 * @param int $digits Number of digits the string should have
+	 * @return string The resulting string
+	 */
+	function NumberToString($number, $digits = 2){
+		$string = "$number";
+		$length = strlen($string);
+		while($length < $digits){
+			$string = "0" . $string;
+			$length ++;
+		}
+		return $string;
+	}
 
 	
 	/**
@@ -107,7 +123,6 @@ class ajaxNewsletter {
 		if (strstr(get_bloginfo("url")."/" , $checkString) === false) {
 			return;
 		}
-
 		$last = get_option("snews_last");
 		$count = get_option("snews_count");
 		$sendFlag = false;
@@ -117,30 +132,30 @@ class ajaxNewsletter {
 				//see if a month since last submit has elapsed and if posts are available
 				$lastMonth = mysql2date("n",$last) + 0;
 				$thisMonth = date("n",mktime()) + 0;
-				
+								
 				$lastYear = mysql2date("Y",$last) + 0;
 				$thisYear = date("Y",mktime()) + 0;
 				
 				if($lastYear < $thisYear && $thisMonth == 1){
-					$since .= $thisYear -1;
+					$since .= ajaxNewsletter::NumberToString($thisYear -1, 4);
 					$since .= "-";
 				}else{
-					$since .= $thisYear ."-";
+					$since .= ajaxNewsletter::NumberToString($thisYear, 4) ."-";
 				}
 				if($thisMonth == 1){
 					$since .= "12-01";
 				}else {
-					$since .= ($thisMonth - 1)."-1";
+					$since .= (ajaxNewsletter::NumberToString($thisMonth - 1, 2))."-01";
 				}
 				
-				$to = $thisYear."-".$thisMonth."-1";
+				$to = $thisYear."-".ajaxNewsletter::NumberToString($thisMonth, 2)."-01";
 				
 				$posts = ajaxNewsletter::getPostsSince($to,$since);
 				$postCount = count($posts);
 				
 				if(($lastYear < $thisYear || $lastMonth < $thisMonth) && $postCount > 0){
 					$content = ajaxNewsletter::generateContent($posts);
-					ajaxNewsletter::sendNewsletter($content);
+					ajaxNewsletter::sendNewsletter($content, mysql2date("Y-m-d H:i:s",$to));
 				}
 				break;
 			case "week":
@@ -157,13 +172,12 @@ class ajaxNewsletter {
 				}
 				
 				$to = ajaxNewsletter::getDateByWeek($thisWeek, $thisYear);
-				
 				$posts = ajaxNewsletter::getPostsSince($to,$since);
-				$postCount = count($posts);
 				
-				if($lastWeek < $thisWeek && $postCount > 0){
+				$postCount = count($posts);
+				if($postCount > 0){
 					$content = ajaxNewsletter::generateContent($posts);
-					ajaxNewsletter::sendNewsletter($content);
+					ajaxNewsletter::sendNewsletter($content, mysql2date("Y-m-d H:i:s",$to));
 				}
 				break;
 			default:
@@ -227,6 +241,7 @@ class ajaxNewsletter {
 	  	add_option("snews_period","manual");
 	  	add_option("snews_template","{TITLE}\n{DATE} - Posted by {AUTHOR}\n\n{EXCERPT}\n{URL}\n\n");
 	  	add_option("snews_last","1970-01-01 00:00:00");
+	  	add_option("snews_last_letter","1970-01-01 00:00:00");
 	  	add_option("snews_header","");
 	  	add_option("snews_footer","");
 	  	add_option("snews_subject",get_bloginfo(). " - Newsletter");
@@ -245,7 +260,7 @@ class ajaxNewsletter {
 		$returnVal = array();
 		/* switch to this If if you wish to support emails@localhost as a valid email address*/
 		//if(!eregi("^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})*$", $email)){
-		if(!eregi("^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$", $email)){
+		if(!eregi("^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,4})$", $email)){
 			$returnVal['result']=false;
 			$returnVal['message']="Invalid email address.";
 			return $returnVal;
@@ -579,20 +594,27 @@ class ajaxNewsletter {
 						<tr>
 							<th style="text-align:left;vertical-align:top;" scope="row"><label style="vertical-align:top;" for="letterHeader"> Header: </label></th>
 							<td> 
-								<textarea style="height:6em;width:500px;" name="letterHeader" id="letterHeader" ><?php echo $header; ?></textarea><br />
+								<textarea style="height:6em;width:500px;" name="letterHeader" id="letterHeader" >
+<?php echo $header; ?>
+</textarea><br />
 							</td>
 						</tr>
 						<tr>
 							<th style="text-align:left;vertical-align:top;" scope="row"><label style="vertical-align:top;" for="letterTemplate"> Template: </label></th>
 							<td> 
-								<textarea style="height:9em;width:500px;" name="letterTemplate" id="letterTemplate" ><?php echo $template; ?></textarea><br />
-								You can use the following tags to get the post information: <code>{TITLE} {URL} {DATE} {TIME} {AUTHOR} {EXCERPT} {CONTENT}</code>
+								<textarea style="height:9em;width:500px;" name="letterTemplate" id="letterTemplate" >
+<?php echo $template; ?>
+</textarea><br />
+								You can use the following tags to get the post information: <code>{TITLE}
+			{UPTITLE} {URL} {DATE} {TIME} {AUTHOR} {EXCERPT} {CONTENT}</code>
 							</td>
 						</tr>
 						<tr>
 							<th style="text-align:left;vertical-align:top;" scope="row"><label style="vertical-align:top;" for="letterFooter"> Footer: </label></th>
 							<td> 
-								<textarea style="height:6em;width:500px;" name="letterFooter" id="letterFooter" ><?php echo $footer; ?></textarea><br />
+								<textarea style="height:6em;width:500px;" name="letterFooter" id="letterFooter" >
+<?php echo $footer; ?>
+</textarea><br />
 							</td>
 						</tr>
 						<tr>
@@ -616,18 +638,24 @@ class ajaxNewsletter {
 	/**
 	 * Prints the send newsletter container (Backoffice)
 	 */
-	function printSendDiv(){
+	function printSendDiv($manualLimit=0){
 		//get relevant options
 		$period = get_option("snews_period");
 		$last = get_option("snews_last");
+		$lastNewsLetter = get_option("snews_last_letter");
 		
 		echo "<div class=\"wrap\">\n<h2>Send Newsletter</h2>";
-		$date = mysql2date(get_option('date_format'), $last);
-		$time = mysql2date(get_option('time_format'), $last);
+		$date = mysql2date(get_option('date_format'), $lastNewsLetter);
+		$time = mysql2date(get_option('time_format'), $lastNewsLetter);
 		
-		$year = mysql2date("Y", $last);
+		$year = mysql2date("Y", $lastNewsLetter);
 		if($year != "1970"){
-			$lastMessage = "<p>The newsletter was last sent on <b>$date</b> at <b>$time</b>.</p>";
+			if($last != $lastNewsLetter){
+				$postsBefore = ", with posts published before<b> ";
+				$postsBefore .= mysql2date(get_option('date_format'),$last). "</b> at <b>";
+				$postsBefore .= mysql2date(get_option('time_format'), $last) ."</b>";
+			}
+			$lastMessage = "<p>The newsletter was last sent on <b>$date</b> at <b>$time</b>$postsBefore.</p>";
 		}else{
 			$lastMessage = "<p>The newsletter was never sent.</p>";
 		}
@@ -644,8 +672,14 @@ class ajaxNewsletter {
 				
 				$postText = ajaxNewsletter::getNumberText($count,"post");
 				$countText = ajaxNewsletter::getNumberText($numPosts,"post");
+				if($numPosts == 1){
+					$countText = "is $countText";
+				}else{
+					$countText = "are $countText";
+				}
 				
-				echo "<p>This is done automatically every time a new post is published, if there are at least $postText in queue. Currently, there are $countText in queue.</p>";
+				
+				echo "<p>This is done automatically every time a new post is published, if there are at least $postText in queue and an active subscriber.<br />Currently, there $countText in queue.</p>";
 				echo $lastMessage;
 				break;
 			case "manual":
@@ -680,10 +714,18 @@ class ajaxNewsletter {
 					
 					echo ".</p>";
 				}
+				if(is_string($manualLimit) || $manualLimit != 0){
+					$sendValue = $manualLimit;
+				}else{
+					$sendValue = $numPosts;
+				}
+				
 				?>
-		<form action="" method="post">
-			<div class="submit"><input type="submit" name="submit" value="Send" 
-				<?php if($disable){ echo "DISABLED"; } ?> /></div>
+		<form action="" method="post" id="newsSend" name="newsSend">
+			Send only the last <input <?php if($disable){ echo "DISABLED"; } ?> style="width: 3em;" type="text" name="postLimit" id="postLimit" value="<?php echo $sendValue; ?>" /> posts.<br />
+			<div class="submit">
+				<input type="submit" name="send" value="Send" <?php if($disable){ echo "DISABLED"; } ?> />
+			</div>
 		</form>
 			
 				<?php
@@ -727,7 +769,7 @@ class ajaxNewsletter {
 			$sinceString = "AND post_date >= '$since'";
 		if($to != "")
 			$toString = "AND post_date < '$to'";
-		$query = "SELECT * FROM {$wpdb->posts} WHERE post_type='post' AND post_status='publish' $sinceString $toString ORDER BY post_date;";
+		$query = "SELECT * FROM {$wpdb->posts} WHERE post_type='post' AND post_status='publish' $sinceString $toString ORDER BY post_date DESC;";
 		$results = $wpdb->get_results($query);
 		return $results;
 	}
@@ -760,11 +802,13 @@ class ajaxNewsletter {
 	/**
 	 * Generates the newsletter content based on the available posts and the template
 	 * @param array $posts An array of posts to be added to the newsletter body
+	 * @param int $limit The maximum number of posts to send
 	 * @return string The newsletter content formated accordingly to the template
 	 */
-	function generateContent($posts){
+	function generateContent($posts, $limit=0){
 		$string = "";
 		$template = get_option("snews_template");
+		$postCount = 0;
 		foreach($posts as $post){
 			$postContent = $template;
 			$excerpt = ajaxNewsletter::generateExcerpt($post);
@@ -781,11 +825,17 @@ class ajaxNewsletter {
 			$postContent = str_replace("{AUTHOR}", $author, $postContent);
 			$postContent = str_replace("{URL}", $url, $postContent);
 			$postContent = str_replace("{TITLE}", $title, $postContent);
+			$postContent = str_replace("{UPTITLE}", strtoupper($title), $postContent);
 			$postContent = str_replace("{DATE}",$date,$postContent);
 			$postContent = str_replace("{TIME}", $time, $postContent);
 				
 			$postContent .="\n";
 			$string .= $postContent;
+			
+			$postCount++;
+			if($limit > 0 && $postCount >= $limit){
+				break;
+			}
 		}
 		return $string;
 	}
@@ -854,8 +904,7 @@ function ActivateConfirm(email){
 						<td>
 							<a class="delete"
 			href="?page=wp-ajax-newsletter/wp-ajax-newsletter.php&amp;del=<?php echo $member->id; ?>#msgMembers"
-			onclick="return DelConfirm('<?php echo $member->email; ?>');">
-		Delete </a>
+			onclick="return DelConfirm('<?php echo $member->email; ?>');">Delete</a>
 						</td>
 					</tr>
 				<?php
@@ -888,10 +937,18 @@ function ActivateConfirm(email){
 		//For future versions to support HTML email we need to set the header describing the content-type
 		//$headers .= 'Content-type: text/html; charset=iso-8859-1' . "\r\n";
 
+		//we should ensure all readers can read the text, so we must specify the charset
+		$headers .= 'Content-type: text/plain; charset='.get_option('blog_charset') . "\r\n";
+		
 		// Additional headers
-		if($to != ""){
+		
+		/** 
+		 * Removed To: from headers to prevent duplicated emails.
+		 * Thanks to mauro_at_bjmaster_dot_com. 
+		 **/
+		/* if($to != ""){
 			$headers .= 'To: '.$to ."\r\n";
-		}
+		}*/
 		
 		$headers .= 'From: '. $from . "\r\n";
 		
@@ -911,10 +968,11 @@ function ActivateConfirm(email){
 	/**
 	 * Send the newsletter to all subscribers
 	 * @param string $content The content to be send in the newsletter
+	 * @param string $date The date to overwrite the last newsletter date (optional)
 	 * 
 	 * @return bool ture if all emails were sent, false if an error occured.
 	 */
-	function sendNewsletter($content){
+	function sendNewsletter($content, $date = ""){
 		$members = ajaxNewsletter::getMembers("active");
 		
 		$header = get_option("snews_header");
@@ -922,27 +980,37 @@ function ActivateConfirm(email){
 		$subject = get_option("snews_subject");
 		$from = get_option("snews_from");
 		
+		$sent = false;
 		foreach ($members as $member){
 			$to  = $member->email;
-			$confirmationURL = get_bloginfo("url") . "/wp-content/plugins/wp-ajax-newsletter/confirmation.php?del={$member->confkey}";
+			$confirmationURL = get_bloginfo("wpurl") . "/wp-content/plugins/wp-ajax-newsletter/confirmation.php?del={$member->confkey}";
 			$message = "";
-			$message .= "$subject\n";
-			$message .= $header."\n\n";
-			$message .= $content."\n\n";
-			$message .= $footer."\n";
-			$message .= "--------------------\n";
+			$message .= "$header\n";
+			$message .= "$content\n";
+			$message .= "$footer\n";
+			$message .= "\n--------------------\n";
 			$message .= "  If you no longer wish to receive this newsletter, use the following link to unsubscribe:\n";
-			$message .= "  " . $confirmationURL."\n";
+			$message .= "  $confirmationURL\n";
 			$message = wordwrap($message, 75, "\n");
 			
 			if(!ajaxNewsletter::sendEmail($from,$to,"","",$subject,$message)){
 				return false; //an error occured so we stop sending emails
 			}
+			$sent = true;
 		}
 		//we set the new date for the last newsletter
-		$now = mktime();
-		$now ++;
-		update_option("snews_last", date("Y-m-d H:i:s", $now));
+		if($sent){
+			$now = mktime();
+			$now ++;
+			//last post date
+			if($date != ""){
+				update_option("snews_last", $date);
+			}else{
+				update_option("snews_last", date("Y-m-d H:i:s", $now));
+			}
+			//last newsletter date
+			update_option("snews_last_letter", date("Y-m-d H:i:s", $now));
+		}
 		
 		return true;
 	}
@@ -959,13 +1027,12 @@ function ActivateConfirm(email){
 		$from = get_option("snews_from");
 		$subject = "[Confirm] " .get_option("snews_subject");
 		$title = get_bloginfo("name");
-		$url = get_bloginfo("url");
+		$url = get_bloginfo("wpurl");
 		
-		$confirmationURL = get_bloginfo("url") . "/wp-content/plugins/wp-ajax-newsletter/confirmation.php?add=$confKey";
+		$confirmationURL = $url . "/wp-content/plugins/wp-ajax-newsletter/confirmation.php?add=$confKey";
 		
 		$message = "";
-		$message .= "$subject\n";
-		$message .= "\n------\nYou have requested to subscribe the newsletter from $title at:\n$url\n";
+		$message .= "You have requested to subscribe the newsletter from $title at:\n$url\n";
 		$message .= "\nIn order to confirm your request click on the following link:\n";
 		$message .= "$confirmationURL\n";
 		$message .= "\nIf you do not wish to receive this newsletter, please ignore this email.\n";
@@ -986,9 +1053,9 @@ function ActivateConfirm(email){
 		$from = get_option("snews_from");
 		$subject = "[Confirmation] " .get_option("snews_subject");
 		$title = get_bloginfo("name");
-		$url = get_bloginfo("url");
+		$url = get_bloginfo("wpurl");
 		
-		$confirmationURL = get_bloginfo("url") . "/wp-content/plugins/wp-ajax-newsletter/confirmation.php?del=$key";
+		$confirmationURL = $url . "/wp-content/plugins/wp-ajax-newsletter/confirmation.php?del=$key";
 		
 		$message .= "You have successfully subscribed the newsletter from $title at:\n$url\n\n\n";
 
@@ -1028,6 +1095,36 @@ function ActivateConfirm(email){
 	}
 	
 	/**
+	 * From wordpress core with some changes to avoid trimming the content
+	 */
+	function update_option($option_name, $newvalue) {
+		global $wpdb;
+	
+		// If the new and old values are the same, no need to update.
+		$oldvalue = get_option($option_name);
+		if ( $newvalue == $oldvalue ) {
+			return false;
+		}
+		
+		$newvalue = $wpdb->escape($newvalue);
+		$option_name = $wpdb->escape($option_name);
+		
+		wp_cache_set($option_name, $newvalue, 'options');
+	
+		if ( false === $oldvalue ) {
+			$wpdb->query("INSERT INTO $wpdb->options (option_name, option_value, option_description, autoload) VALUES ('$option_name', '$newvalue', '', 'yes')");
+			return true;
+		}else{	
+			$wpdb->query("UPDATE $wpdb->options SET option_value = '$newvalue' WHERE option_name = '$option_name'");
+			if ( $wpdb->rows_affected == 1 ) {
+				do_action("update_option_{$option_name}", $oldvalue, $_newvalue);
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	/**
 	 * Updates settings in the database
 	 * 
 	 * @param array $settingsArray Contains the pairs array[key]=value for the plugin settings
@@ -1035,7 +1132,7 @@ function ActivateConfirm(email){
 	function saveSettings($settingsArray){
 		$keys = array_keys($settingsArray);
 		foreach	($keys as $key){
-			update_option("snews_".$key,$settingsArray[$key]);
+			ajaxNewsletter::update_option("snews_".$key,$settingsArray[$key]);
 		}
 	}
 	
@@ -1055,15 +1152,15 @@ function ActivateConfirm(email){
 			}
 		}
 		
-		$newsletterURL = get_bloginfo("url") . "/wp-content/plugins/wp-ajax-newsletter/";
+		$newsletterURL = get_bloginfo("wpurl") . "/wp-content/plugins/wp-ajax-newsletter/";
 		
 		$action = $_SERVER["REQUEST_URI"];
-		echo '<script src="'.get_settings('siteurl').'/wp-includes/js/tw-sack.js" type="text/javascript"></script>'."\n";
+		echo '<script src="'.get_bloginfo('wpurl').'/wp-includes/js/tw-sack.js" type="text/javascript"></script>'."\n";
 		?>
 		
 		<script type="text/javascript" src="<?= $newsletterURL ?>snews_ajax.js"></script>
 		
-		<div class="newsletterContainer" style="width:100%;" id="ajaxNewsletter">
+		<div class="newsletterContainer" id="ajaxNewsletter">
 		<?php ajaxNewsletter::subscriptionForm($email); ?>
 		</div>
 		<div style="display:none" id="newsletterLoading"><img src="<?= $newsletterURL ?>/loading.gif" alt="Loading..." title="Loading..." /> Loading ...</div>
@@ -1074,7 +1171,7 @@ function ActivateConfirm(email){
 	 * Prints only the from for newsletter subscription (auxiliary method, do not use in the template)
 	 */
 	function subscriptionForm($email=""){
-		$action = get_bloginfo("wpurl");
+		$action = get_bloginfo("url");
 ?>
 	<form action="javascript:StartFade('<?= $action ?>','ajaxNewsletter','newsletterLoading');"
 			name="newsletterForm" id="newsletterForm" method="post">
@@ -1144,7 +1241,7 @@ function ActivateConfirm(email){
 	<head>
 		<title>Newsletter</title>
 		<link rel="stylesheet"
-			href="<?php echo get_bloginfo("url"); ?>/wp-admin/wp-admin.css"
+			href="<?php echo get_bloginfo("wpurl"); ?>/wp-admin/wp-admin.css"
 			type="text/css" />
 		<style type="text/css">
 		#info h1{

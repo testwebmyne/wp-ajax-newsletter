@@ -1,3 +1,11 @@
+<script type="text/javascript">
+function sendNewsletter(formID,textID,value){
+	var formElement = document.getElementById(formID);
+	var limit = document.getElementById(textID);
+	limit.value = value;
+	formElement.submit();
+}
+</script>
 <?php
 $delete = $_REQUEST["del"];
 $activate = $_REQUEST["actv"];
@@ -5,23 +13,41 @@ $activate = $_REQUEST["actv"];
 $message = "";
 $succcessMsg = true;
 $membersUpdate = false;
+$limit = 0;
 
 //if we have requested to send the newsletter manually
-if($_POST["submit"]=="Send"){
+if($_POST["send"]=="Send"){
+	$limit = $_POST["postLimit"];
+	
 	$last = get_option("snews_last");
 	$posts = ajaxNewsletter::getPostsSince("" ,$last);
-	if($posts != "" && count($posts) > 0){
-		$content = ajaxNewsletter::generateContent($posts);
-		if(ajaxNewsletter::sendNewsletter($content)){
-			$message = "Newsletter sent successfully.";
-			ajaxNewsletter::printMessage($message);
+	$pcount = count($posts);
+	
+	if($limit == ""){
+		$limit = 0;
+	}elseif(!is_numeric($limit) || $limit < 1 || $limit > $pcount){
+		$message = "The post limit must be a numeric value between <b>1</b> and <b>$pcount</b>.";
+		if($pcount == 1){
+			$message = "The post limit must be a numeric value of <b>1</b>.";
+		}
+		$message .= " <a href=\"javascript:sendNewsletter('newsSend','postLimit',$pcount);\">Send the last ";
+		$message .= ajaxNewsletter::getNumberText($pcount,"post"). " &raquo;</a>";
+		ajaxNewsletter::printMessage($message,false);
+	}else{
+		if($posts != "" && $pcount > 0){
+			$content = ajaxNewsletter::generateContent($posts, $limit);
+			if(ajaxNewsletter::sendNewsletter($content)){
+				$limit = 0;
+				$message = "Newsletter sent successfully.";
+				ajaxNewsletter::printMessage($message);
+			}else{
+				$message = "An error occured while sending the newsletter. Please try again latter.";
+				ajaxNewsletter::printMessage($message,false);
+			}
 		}else{
-			$message = "An error occured while sending the newsletter. Please try again latter.";
+			$message = "There are no posts to add to the newsletter.";
 			ajaxNewsletter::printMessage($message,false);
 		}
-	}else{
-		$message = "There are no posts to add to the newsletter.";
-		ajaxNewsletter::printMessage($message,false);
 	}
 }
 
@@ -75,7 +101,7 @@ if(is_numeric($delete)){
 }
 
 //print the html with newsletter info and the conditional ability to send
-ajaxNewsletter::printSendDiv();
+ajaxNewsletter::printSendDiv($limit);
 
 
 //prints the HTML to configure the newsletter
